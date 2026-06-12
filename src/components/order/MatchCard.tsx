@@ -17,7 +17,7 @@ export default function MatchCard({ match, index, onSelect }: MatchCardProps) {
   const game = getGameById(match.skill.gameId);
 
   return (
-    <Card className="overflow-hidden animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
+    <Card className="overflow-hidden animate-fade-in-up" style={{ animationDelay: `${Math.max(0, index) * 100}ms` }}>
       <div className="p-5">
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0">
@@ -41,6 +41,11 @@ export default function MatchCard({ match, index, onSelect }: MatchCardProps) {
               {index === 2 && (
                 <div className="absolute -top-2 -left-2 w-7 h-7 rounded-full bg-gradient-to-br from-orange-700 to-orange-900 flex items-center justify-center text-xs font-bold text-white shadow-lg">
                   3
+                </div>
+              )}
+              {index >= 0 && index > 2 && (
+                <div className="absolute -top-2 -left-2 w-7 h-7 rounded-full bg-cyan-neon/80 flex items-center justify-center text-xs font-bold text-black shadow-lg">
+                  {index + 1}
                 </div>
               )}
             </div>

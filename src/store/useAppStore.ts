@@ -122,9 +122,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
 
     results.sort((a, b) => b.matchScore - a.matchScore);
-    const topResults = results.slice(0, 5);
-    set({ matchResults: topResults });
-    return topResults;
+    set({ matchResults: results });
+    return results;
   },
   createOrder: (coachId, skillId) => {
     const { pendingOrderData, currentUserId, coachSkills } = get();

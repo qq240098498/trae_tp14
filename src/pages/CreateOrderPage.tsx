@@ -68,7 +68,7 @@ export default function CreateOrderPage() {
           </span>
           发布陪玩需求
         </h1>
-        <p className="text-cyber-text-secondary">填写需求，我们将为你智能匹配最合适的陪玩师</p>
+        <p className="text-cyber-text-secondary">填写需求，自由选择心仪的陪玩师（符合要求的排名靠前）</p>
       </div>
       <CreateOrderForm />
     </div>
