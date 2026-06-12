@@ -30,7 +30,7 @@ export interface Game {
   category: string;
 }
 
-export type OrderStatus = 'pending_payment' | 'paid' | 'in_progress' | 'completed' | 'cancelled';
+export type OrderStatus = 'pending_payment' | 'paid' | 'in_progress' | 'completed' | 'cancelled' | 'refunding' | 'refunded';
 
 export interface Order {
   id: string;
@@ -43,6 +43,10 @@ export interface Order {
   totalPrice: number;
   status: OrderStatus;
   createdAt: string;
+  refundReason?: string;
+  refundRequestedAt?: string;
+  refundDecidedAt?: string;
+  previousStatus?: OrderStatus;
 }
 
 export interface Review {

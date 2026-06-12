@@ -10,6 +10,8 @@ export const statusText: Record<OrderStatus, string> = {
   in_progress: '进行中',
   completed: '已完成',
   cancelled: '已取消',
+  refunding: '退款申请中',
+  refunded: '已退款',
 };
 
 export const statusColor: Record<OrderStatus, string> = {
@@ -18,6 +20,8 @@ export const statusColor: Record<OrderStatus, string> = {
   in_progress: 'text-cyan-400 border-cyan-400/30 bg-cyan-400/10',
   completed: 'text-green-400 border-green-400/30 bg-green-400/10',
   cancelled: 'text-gray-400 border-gray-400/30 bg-gray-400/10',
+  refunding: 'text-orange-400 border-orange-400/30 bg-orange-400/10',
+  refunded: 'text-purple-400 border-purple-400/30 bg-purple-400/10',
 };
 
 export const generateId = (): string => {

@@ -31,6 +31,9 @@ interface AppState {
   generateMatches: () => MatchResult[];
   createOrder: (coachId: string, skillId: string) => Order;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  requestRefund: (orderId: string, reason: string) => boolean;
+  approveRefund: (orderId: string) => void;
+  rejectRefund: (orderId: string) => void;
 
   addReview: (review: Omit<Review, 'id' | 'createdAt'>) => void;
 }
@@ -148,6 +151,60 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateOrderStatus: (orderId, status) => {
     set(state => ({
       orders: state.orders.map(o => (o.id === orderId ? { ...o, status } : o)),
+    }));
+  },
+  requestRefund: (orderId, reason) => {
+    const { orders } = get();
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return false;
+    if (order.status !== 'paid' && order.status !== 'in_progress') return false;
+
+    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+
+    if (order.status === 'paid') {
+      set(state => ({
+        orders: state.orders.map(o => (o.id === orderId ? {
+          ...o,
+          status: 'refunded',
+          refundReason: reason,
+          refundRequestedAt: now,
+          refundDecidedAt: now,
+          previousStatus: order.status,
+        } : o)),
+      }));
+      return true;
+    } else {
+      set(state => ({
+        orders: state.orders.map(o => (o.id === orderId ? {
+          ...o,
+          status: 'refunding',
+          refundReason: reason,
+          refundRequestedAt: now,
+          previousStatus: order.status,
+        } : o)),
+      }));
+      return true;
+    }
+  },
+  approveRefund: (orderId) => {
+    const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    set(state => ({
+      orders: state.orders.map(o => (o.id === orderId ? {
+        ...o,
+        status: 'refunded',
+        refundDecidedAt: now,
+      } : o)),
+    }));
+  },
+  rejectRefund: (orderId) => {
+    set(state => ({
+      orders: state.orders.map(o => (o.id === orderId && o.status === 'refunding' ? {
+        ...o,
+        status: o.previousStatus || 'in_progress',
+        refundReason: undefined,
+        refundRequestedAt: undefined,
+        previousStatus: undefined,
+      } : o)),
     }));
   },
   addReview: (review) => {

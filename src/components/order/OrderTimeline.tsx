@@ -1,4 +1,4 @@
-import { CheckCircle, Circle, Clock } from 'lucide-react';
+import { CheckCircle, Circle, Clock, RefreshCcw, XCircle } from 'lucide-react';
 import type { OrderStatus } from '../../types';
 import { cn } from '../../lib/utils';
 
@@ -14,7 +14,6 @@ interface OrderTimelineProps {
 }
 
 export default function OrderTimeline({ currentStatus }: OrderTimelineProps) {
-  const currentIndex = steps.findIndex(s => s.status === currentStatus);
   if (currentStatus === 'cancelled') {
     return (
       <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-center">
@@ -22,6 +21,30 @@ export default function OrderTimeline({ currentStatus }: OrderTimelineProps) {
       </div>
     );
   }
+
+  if (currentStatus === 'refunding') {
+    return (
+      <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/30">
+        <div className="flex items-center justify-center gap-3">
+          <RefreshCcw size={20} className="text-orange-400 animate-spin" />
+          <span className="text-orange-400 font-medium">退款申请审核中，等待陪玩师确认</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentStatus === 'refunded') {
+    return (
+      <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/30">
+        <div className="flex items-center justify-center gap-3">
+          <XCircle size={20} className="text-purple-400" />
+          <span className="text-purple-400 font-medium">订单已退款</span>
+        </div>
+      </div>
+    );
+  }
+
+  const currentIndex = steps.findIndex(s => s.status === currentStatus);
 
   return (
     <div className="relative">

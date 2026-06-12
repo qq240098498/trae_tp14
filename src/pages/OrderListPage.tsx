@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Package, Clock, CreditCard, CheckCircle, XCircle } from 'lucide-react';
+import { Package, Clock, CreditCard, CheckCircle, XCircle, RefreshCcw } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import Card from '../components/common/Card';
 import OrderCard from '../components/order/OrderCard';
@@ -12,6 +12,8 @@ const tabs: { status: OrderStatus | 'all'; label: string; icon: any }[] = [
   { status: 'paid', label: '已支付', icon: Clock },
   { status: 'in_progress', label: '进行中', icon: Clock },
   { status: 'completed', label: '已完成', icon: CheckCircle },
+  { status: 'refunding', label: '退款中', icon: RefreshCcw },
+  { status: 'refunded', label: '已退款', icon: XCircle },
   { status: 'cancelled', label: '已取消', icon: XCircle },
 ];
 
