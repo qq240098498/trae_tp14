@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Sparkles, RefreshCw, Search, Filter, TrendingUp, Star, DollarSign, Wifi } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
@@ -23,9 +23,10 @@ export default function MatchPage() {
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   const [maxPrice, setMaxPrice] = useState<number>(200);
   const [sortBy, setSortBy] = useState<SortKey>('match');
+  const isSelectingRef = useRef(false);
 
   useEffect(() => {
-    if (!pendingOrder) {
+    if (!pendingOrder && !isSelectingRef.current) {
       navigate('/order/create');
       return;
     }
@@ -76,12 +77,13 @@ export default function MatchPage() {
   }, [matches, searchQuery, showOnlineOnly, maxPrice, sortBy]);
 
   const handleSelect = (coachId: string, skillId: string) => {
+    isSelectingRef.current = true;
     const order = createOrder(coachId, skillId);
     navigate(`/orders/${order.id}`);
   };
 
-  if (!pendingOrder) return null;
-  const game = getGameById(pendingOrder.gameId);
+  if (!pendingOrder && !isSelectingRef.current) return null;
+  const game = pendingOrder ? getGameById(pendingOrder.gameId) : undefined;
 
   if (loading) {
     return (
