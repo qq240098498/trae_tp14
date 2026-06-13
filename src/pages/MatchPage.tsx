@@ -1,13 +1,14 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, RefreshCw, Search, Filter, TrendingUp, Star, DollarSign, Wifi, Users, Clock, Heart, ChevronRight, Check, Zap, X, AlertTriangle, Calendar, Ban, Clock as ClockIcon, Gamepad2, Wallet, UserX } from 'lucide-react';
+import { ArrowLeft, Sparkles, RefreshCw, Search, Filter, TrendingUp, Star, DollarSign, Wifi, Users, Clock, Heart, ChevronRight, Check, Zap, X, AlertTriangle, Calendar, Ban, Clock as ClockIcon, Gamepad2, Wallet, UserX, BarChart3 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import MatchCard from '../components/order/MatchCard';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import StarRating from '../components/common/StarRating';
+import StatsDashboard from '../components/stats/StatsDashboard';
 import { cn } from '../lib/utils';
-import type { RepeatCustomer, BookingValidationResult, BookingFailureReason } from '../types';
+import type { RepeatCustomer, BookingValidationResult, BookingFailureReason, PlatformStats } from '../types';
 
 type SortKey = 'match' | 'rating' | 'price_asc' | 'price_desc';
 type TabKey = 'all' | 'repeat';
@@ -21,6 +22,7 @@ export default function MatchPage() {
   const validateRepeatBooking = useAppStore(s => s.validateRepeatBooking);
   const matchResults = useAppStore(s => s.matchResults);
   const getRepeatCustomers = useAppStore(s => s.getRepeatCustomers);
+  const getPlatformStats = useAppStore(s => s.getPlatformStats);
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -33,7 +35,12 @@ export default function MatchPage() {
   const [selectedRepeatCoach, setSelectedRepeatCoach] = useState<RepeatCustomer | null>(null);
   const [repeatLoading, setRepeatLoading] = useState(false);
   const [bookingError, setBookingError] = useState<{ coachId: string; result: BookingValidationResult } | null>(null);
+  const [showStats, setShowStats] = useState(false);
   const isSelectingRef = useRef(false);
+
+  const platformStats = useMemo<PlatformStats>(() => {
+    return getPlatformStats();
+  }, [getPlatformStats]);
 
   useEffect(() => {
     if (!pendingOrder && !isSelectingRef.current) {
@@ -235,6 +242,13 @@ export default function MatchPage() {
               <div className="text-xs text-cyber-text-muted">预算</div>
               <div className="font-display font-bold neon-text-magenta">¥{pendingOrder.budget}/小时</div>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowStats(true)}
+            >
+              <BarChart3 size={16} /> 数据统计
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -664,6 +678,13 @@ export default function MatchPage() {
             </>
           )}
         </>
+      )}
+
+      {showStats && (
+        <StatsDashboard
+          stats={platformStats}
+          onClose={() => setShowStats(false)}
+        />
       )}
     </div>
   );

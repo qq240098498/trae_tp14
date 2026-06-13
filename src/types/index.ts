@@ -104,3 +104,26 @@ export interface BookingValidationResult {
   message?: string;
   detail?: string;
 }
+
+export interface CoachOrderStats {
+  coach: User;
+  orderCount: number;
+  totalRevenue: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  averageRating: number;
+  reviewCount: number;
+  positiveReviewCount: number;
+  positiveRate: number;
+}
+
+export interface PlatformStats {
+  totalOrders: number;
+  totalRevenue: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  totalPositiveReviews: number;
+  totalReviews: number;
+  overallPositiveRate: number;
+  coachRankings: CoachOrderStats[];
+}

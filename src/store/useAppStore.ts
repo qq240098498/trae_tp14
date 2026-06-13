@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { User, CoachSkill, Game, Order, Review, CreateOrderData, MatchResult, OrderStatus, RepeatCustomer, BookingValidationResult } from '../types';
+import type { User, CoachSkill, Game, Order, Review, CreateOrderData, MatchResult, OrderStatus, RepeatCustomer, BookingValidationResult, PlatformStats, CoachOrderStats } from '../types';
 import { games, initialUsers, initialCoachSkills, initialOrders, initialReviews } from '../data/mockData';
 import { generateId, calculateMatchScore } from '../utils/helpers';
 
@@ -39,6 +39,7 @@ interface AppState {
   rejectRefund: (orderId: string) => void;
 
   addReview: (review: Omit<Review, 'id' | 'createdAt'>) => void;
+  getPlatformStats: () => PlatformStats;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -416,5 +417,59 @@ export const useAppStore = create<AppState>((set, get) => ({
         : state.users;
       return { reviews: [...state.reviews, newReview], users: updatedUsers };
     });
+  },
+  getPlatformStats: () => {
+    const { orders, reviews, users } = get();
+    const coaches = users.filter(u => u.role === 'coach');
+
+    const totalOrders = orders.length;
+    const totalRevenue = orders.reduce((sum, o) => sum + o.totalPrice, 0);
+    const completedOrders = orders.filter(o => o.status === 'completed').length;
+    const cancelledOrders = orders.filter(o => o.status === 'cancelled' || o.status === 'refunded').length;
+
+    const coachReviews = reviews.filter(r => r.toUserId.startsWith('c'));
+    const totalReviews = coachReviews.length;
+    const totalPositiveReviews = coachReviews.filter(r => r.overallRating >= 4).length;
+    const overallPositiveRate = totalReviews > 0 ? (totalPositiveReviews / totalReviews) * 100 : 0;
+
+    const coachRankings: CoachOrderStats[] = coaches.map(coach => {
+      const coachOrders = orders.filter(o => o.coachId === coach.id);
+      const coachCompletedOrders = coachOrders.filter(o => o.status === 'completed').length;
+      const coachCancelledOrders = coachOrders.filter(o => o.status === 'cancelled' || o.status === 'refunded').length;
+      const coachTotalRevenue = coachOrders.reduce((sum, o) => sum + o.totalPrice, 0);
+
+      const coachReviewList = coachReviews.filter(r => r.toUserId === coach.id);
+      const coachReviewCount = coachReviewList.length;
+      const coachPositiveReviews = coachReviewList.filter(r => r.overallRating >= 4).length;
+      const coachPositiveRate = coachReviewCount > 0 ? (coachPositiveReviews / coachReviewCount) * 100 : 0;
+      const coachAvgRating = coachReviewCount > 0
+        ? coachReviewList.reduce((sum, r) => sum + r.overallRating, 0) / coachReviewCount
+        : coach.rating;
+
+      return {
+        coach,
+        orderCount: coachOrders.length,
+        totalRevenue: coachTotalRevenue,
+        completedOrders: coachCompletedOrders,
+        cancelledOrders: coachCancelledOrders,
+        averageRating: Math.round(coachAvgRating * 100) / 100,
+        reviewCount: coachReviewCount,
+        positiveReviewCount: coachPositiveReviews,
+        positiveRate: Math.round(coachPositiveRate * 100) / 100,
+      };
+    });
+
+    coachRankings.sort((a, b) => b.orderCount - a.orderCount || b.totalRevenue - a.totalRevenue);
+
+    return {
+      totalOrders,
+      totalRevenue,
+      completedOrders,
+      cancelledOrders,
+      totalPositiveReviews,
+      totalReviews,
+      overallPositiveRate: Math.round(overallPositiveRate * 100) / 100,
+      coachRankings,
+    };
   },
 }));
