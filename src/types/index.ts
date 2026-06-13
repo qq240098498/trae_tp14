@@ -70,6 +70,14 @@ export interface MatchResult {
   matchReasons: string[];
 }
 
+export interface RepeatCustomer {
+  coach: User;
+  skills: CoachSkill[];
+  orderCount: number;
+  lastOrder: Order | null;
+  averageRating: number;
+}
+
 export interface CreateOrderData {
   gameId: string;
   duration: number;

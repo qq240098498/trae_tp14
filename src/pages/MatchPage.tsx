@@ -1,20 +1,25 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, RefreshCw, Search, Filter, TrendingUp, Star, DollarSign, Wifi } from 'lucide-react';
+import { ArrowLeft, Sparkles, RefreshCw, Search, Filter, TrendingUp, Star, DollarSign, Wifi, Users, Clock, Heart, ChevronRight, Check, Zap } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import MatchCard from '../components/order/MatchCard';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
+import StarRating from '../components/common/StarRating';
 import { cn } from '../lib/utils';
+import type { RepeatCustomer } from '../types';
 
 type SortKey = 'match' | 'rating' | 'price_asc' | 'price_desc';
+type TabKey = 'all' | 'repeat';
 
 export default function MatchPage() {
   const pendingOrder = useAppStore(s => s.pendingOrderData);
   const getGameById = useAppStore(s => s.getGameById);
   const generateMatches = useAppStore(s => s.generateMatches);
   const createOrder = useAppStore(s => s.createOrder);
+  const createOrderFromRepeat = useAppStore(s => s.createOrderFromRepeat);
   const matchResults = useAppStore(s => s.matchResults);
+  const getRepeatCustomers = useAppStore(s => s.getRepeatCustomers);
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -23,6 +28,9 @@ export default function MatchPage() {
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   const [maxPrice, setMaxPrice] = useState<number>(200);
   const [sortBy, setSortBy] = useState<SortKey>('match');
+  const [activeTab, setActiveTab] = useState<TabKey>('all');
+  const [selectedRepeatCoach, setSelectedRepeatCoach] = useState<RepeatCustomer | null>(null);
+  const [repeatLoading, setRepeatLoading] = useState(false);
   const isSelectingRef = useRef(false);
 
   useEffect(() => {
@@ -39,6 +47,34 @@ export default function MatchPage() {
     }, 1500);
     return () => clearTimeout(timer);
   }, [pendingOrder, navigate, generateMatches]);
+
+  const repeatCustomers = useMemo(() => {
+    return getRepeatCustomers();
+  }, [getRepeatCustomers]);
+
+  const filteredRepeatCustomers = useMemo(() => {
+    let result = [...repeatCustomers];
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(rc =>
+        rc.coach.username.toLowerCase().includes(q) ||
+        rc.coach.bio.toLowerCase().includes(q)
+      );
+    }
+
+    if (showOnlineOnly) {
+      result = result.filter(rc => rc.coach.isOnline);
+    }
+
+    if (pendingOrder) {
+      result = result.filter(rc =>
+        rc.skills.some(s => s.gameId === pendingOrder.gameId && s.pricePerHour <= maxPrice)
+      );
+    }
+
+    return result;
+  }, [repeatCustomers, searchQuery, showOnlineOnly, maxPrice, pendingOrder]);
 
   const filteredAndSortedMatches = useMemo(() => {
     let result = [...matches];
@@ -80,6 +116,20 @@ export default function MatchPage() {
     isSelectingRef.current = true;
     const order = createOrder(coachId, skillId);
     navigate(`/orders/${order.id}`);
+  };
+
+  const handleRepeatSelect = (repeatCustomer: RepeatCustomer) => {
+    if (!pendingOrder) return;
+    const gameSkill = repeatCustomer.skills.find(s => s.gameId === pendingOrder.gameId);
+    if (!gameSkill) return;
+
+    setRepeatLoading(true);
+    setTimeout(() => {
+      isSelectingRef.current = true;
+      const order = createOrderFromRepeat(repeatCustomer.coach.id, gameSkill.id, pendingOrder);
+      setRepeatLoading(false);
+      navigate(`/orders/${order.id}`);
+    }, 500);
   };
 
   if (!pendingOrder && !isSelectingRef.current) return null;
@@ -144,6 +194,40 @@ export default function MatchPage() {
         <Sparkles size={20} className="text-yellow-400" />
         <h2 className="font-display font-bold text-xl">自由选择陪玩师</h2>
         <span className="text-sm text-cyber-text-muted">共 {matches.length} 位 · 已按匹配度优先排序</span>
+      </div>
+
+      <div className="mb-4">
+        <div className="flex gap-2 p-1 rounded-lg bg-cyber-bg-primary/40 border border-white/5">
+          <button
+            onClick={() => setActiveTab('all')}
+            className={cn(
+              'flex-1 px-4 py-2.5 rounded-md text-sm font-medium transition-all inline-flex items-center justify-center gap-2',
+              activeTab === 'all'
+                ? 'bg-cyan-neon text-black shadow-neon-cyan'
+                : 'text-cyber-text-secondary hover:text-white'
+            )}
+          >
+            <Users size={16} />
+            全部陪玩师
+          </button>
+          <button
+            onClick={() => setActiveTab('repeat')}
+            className={cn(
+              'flex-1 px-4 py-2.5 rounded-md text-sm font-medium transition-all inline-flex items-center justify-center gap-2 relative',
+              activeTab === 'repeat'
+                ? 'bg-fuchsia-500 text-white shadow-neon-magenta'
+                : 'text-cyber-text-secondary hover:text-white'
+            )}
+          >
+            <Heart size={16} className={cn(activeTab === 'repeat' && 'animate-pulse')} />
+            老顾客
+            {repeatCustomers.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-fuchsia-500 text-xs flex items-center justify-center text-white font-bold">
+                {repeatCustomers.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       <Card className="p-4 mb-6">
@@ -220,38 +304,206 @@ export default function MatchPage() {
         </div>
       </Card>
 
-      {filteredAndSortedMatches.length === 0 ? (
-        <Card className="p-8 text-center">
-          <p className="text-cyber-text-secondary mb-4">暂无符合条件的陪玩师</p>
-          <div className="flex gap-3 justify-center">
-            <Link to="/order/create">
-              <Button variant="outline">修改搜索条件</Button>
-            </Link>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setSearchQuery('');
-                setShowOnlineOnly(false);
-                setMaxPrice(200);
-              }}
-            >
-              重置筛选
-            </Button>
-          </div>
-        </Card>
+      {activeTab === 'repeat' ? (
+        <>
+          {filteredRepeatCustomers.length === 0 ? (
+            <Card className="p-8 text-center">
+              <Heart size={48} className="mx-auto text-fuchsia-500/50 mb-4" />
+              <h3 className="font-display font-bold text-lg mb-2">暂无老顾客</h3>
+              <p className="text-cyber-text-secondary mb-4">
+                {repeatCustomers.length === 0
+                  ? '你还没有完成过订单，完成订单后陪玩师会出现在这里'
+                  : '当前筛选条件下没有符合的老顾客，试试调整筛选条件'}
+              </p>
+              {repeatCustomers.length > 0 && (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setShowOnlineOnly(false);
+                    setMaxPrice(200);
+                  }}
+                >
+                  重置筛选
+                </Button>
+              )}
+              {repeatCustomers.length === 0 && (
+                <Button variant="primary" onClick={() => setActiveTab('all')}>
+                  去选择新陪玩师
+                </Button>
+              )}
+            </Card>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-cyber-text-muted">找到 {filteredRepeatCustomers.length} 位老顾客</p>
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-fuchsia-500/15 border border-fuchsia-500/30 text-xs text-fuchsia-400">
+                  <Heart size={12} />
+                  老顾客专属
+                </span>
+              </div>
+              <div className="space-y-4">
+                {filteredRepeatCustomers.map((rc, index) => {
+                  const gameSkill = rc.skills.find(s => s.gameId === pendingOrder?.gameId);
+                  const lastGame = rc.lastOrder ? getGameById(rc.lastOrder.gameId) : null;
+                  return (
+                    <Card
+                      key={rc.coach.id}
+                      className="overflow-hidden animate-fade-in-up border-fuchsia-500/30"
+                      style={{
+                        animationDelay: `${index * 100}ms`,
+                        boxShadow: '0 0 20px rgba(217, 70, 239, 0.1)'
+                      }}
+                    >
+                      <div className="p-5">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0">
+                            <div className="relative">
+                              <img
+                                src={rc.coach.avatar}
+                                alt={rc.coach.username}
+                                className="w-16 h-16 rounded-xl border-2 border-fuchsia-500/50"
+                                style={{ boxShadow: rc.coach.isOnline ? '0 0 15px rgba(217, 70, 239, 0.4)' : undefined }}
+                              />
+                              <div className="absolute -top-2 -left-2 w-8 h-8 rounded-full bg-gradient-to-br from-fuchsia-500 to-pink-500 flex items-center justify-center shadow-lg">
+                                <Heart size={14} className="text-white fill-white" />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-display font-bold text-lg">{rc.coach.username}</h4>
+                                  {rc.coach.isOnline && (
+                                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/20 border border-green-400/40 text-xs text-green-400">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                                      在线
+                                    </span>
+                                  )}
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-fuchsia-500/15 border border-fuchsia-500/30 text-xs text-fuchsia-400">
+                                    已下单 {rc.orderCount} 次
+                                  </span>
+                                </div>
+                                <StarRating rating={rc.coach.rating} showValue size={14} />
+                                <p className="text-xs text-cyber-text-muted mt-1">{rc.coach.reviewCount} 条评价</p>
+                              </div>
+
+                              {gameSkill && (
+                                <div className="text-right flex-shrink-0">
+                                  <div className="text-lg font-bold neon-text-magenta">
+                                    ¥{gameSkill.pricePerHour}
+                                    <span className="text-xs text-cyber-text-muted font-normal">/小时</span>
+                                  </div>
+                                  <p className="text-xs text-cyber-text-muted">{gameSkill.rankLevel}</p>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-300">
+                                <Check size={10} /> 老顾客信赖
+                              </span>
+                              {rc.averageRating > 0 && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-yellow-500/10 border border-yellow-500/20 text-yellow-300">
+                                  <Star size={10} /> 你的评价 {rc.averageRating}分
+                                </span>
+                              )}
+                              {rc.lastOrder && lastGame && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-cyan-neon/10 border border-cyan-neon/20 text-cyan-300">
+                                  <Clock size={10} /> 上次: {lastGame.icon} {lastGame.name}
+                                </span>
+                              )}
+                            </div>
+
+                            {rc.lastOrder && (
+                              <div className="mt-3 text-xs text-cyber-text-muted">
+                                上次一起玩: {rc.lastOrder.createdAt} · {rc.lastOrder.duration}小时 · 共¥{rc.lastOrder.totalPrice}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t border-white/5 flex gap-3">
+                          <Link
+                            to={`/coaches/${rc.coach.id}`}
+                            className="flex-1"
+                          >
+                            <Button variant="outline" size="sm" className="w-full">
+                              查看详情 <ChevronRight size={16} />
+                            </Button>
+                          </Link>
+                          {gameSkill ? (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              className="flex-1 bg-gradient-to-r from-fuchsia-500 to-pink-500 hover:from-fuchsia-600 hover:to-pink-600"
+                              onClick={() => handleRepeatSelect(rc)}
+                              disabled={repeatLoading}
+                            >
+                              {repeatLoading && selectedRepeatCoach?.coach.id === rc.coach.id ? (
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                              ) : (
+                                <Heart size={16} className="mr-1" />
+                              )}
+                              再次预约
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="flex-1"
+                              disabled
+                            >
+                              暂无此游戏服务
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </>
       ) : (
         <>
-          <p className="text-sm text-cyber-text-muted mb-4">找到 {filteredAndSortedMatches.length} 位陪玩师</p>
-          <div className="space-y-4">
-            {filteredAndSortedMatches.map((match, index) => (
-              <MatchCard
-                key={match.coach.id}
-                match={match}
-                index={sortBy === 'match' ? index : -1}
-                onSelect={() => handleSelect(match.coach.id, match.skill.id)}
-              />
-            ))}
-          </div>
+          {filteredAndSortedMatches.length === 0 ? (
+            <Card className="p-8 text-center">
+              <p className="text-cyber-text-secondary mb-4">暂无符合条件的陪玩师</p>
+              <div className="flex gap-3 justify-center">
+                <Link to="/order/create">
+                  <Button variant="outline">修改搜索条件</Button>
+                </Link>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setShowOnlineOnly(false);
+                    setMaxPrice(200);
+                  }}
+                >
+                  重置筛选
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            <>
+              <p className="text-sm text-cyber-text-muted mb-4">找到 {filteredAndSortedMatches.length} 位陪玩师</p>
+              <div className="space-y-4">
+                {filteredAndSortedMatches.map((match, index) => (
+                  <MatchCard
+                    key={match.coach.id}
+                    match={match}
+                    index={sortBy === 'match' ? index : -1}
+                    onSelect={() => handleSelect(match.coach.id, match.skill.id)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

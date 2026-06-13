@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { User, CoachSkill, Game, Order, Review, CreateOrderData, MatchResult, OrderStatus } from '../types';
+import type { User, CoachSkill, Game, Order, Review, CreateOrderData, MatchResult, OrderStatus, RepeatCustomer } from '../types';
 import { games, initialUsers, initialCoachSkills, initialOrders, initialReviews } from '../data/mockData';
 import { generateId, calculateMatchScore } from '../utils/helpers';
 
@@ -21,6 +21,8 @@ interface AppState {
   getOrderById: (id: string) => Order | undefined;
   getOrdersByPlayer: (playerId: string) => Order[];
   getReviewsForCoach: (coachId: string) => Review[];
+  getRepeatCustomers: () => RepeatCustomer[];
+  createOrderFromRepeat: (coachId: string, skillId: string, orderData: CreateOrderData) => Order;
 
   registerPlayer: (data: Partial<User>) => void;
   registerCoach: (data: Partial<User>, skills: Omit<CoachSkill, 'id' | 'userId'>[]) => void;
@@ -59,6 +61,73 @@ export const useAppStore = create<AppState>((set, get) => ({
   getOrderById: (id) => get().orders.find(o => o.id === id),
   getOrdersByPlayer: (playerId) => get().orders.filter(o => o.playerId === playerId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   getReviewsForCoach: (coachId) => get().reviews.filter(r => r.toUserId === coachId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+
+  getRepeatCustomers: () => {
+    const { currentUserId, orders, users, coachSkills, reviews } = get();
+    if (!currentUserId) return [];
+
+    const playerOrders = orders.filter(o => o.playerId === currentUserId && o.status === 'completed');
+    const coachIdMap = new Map<string, Order[]>();
+
+    playerOrders.forEach(order => {
+      if (!coachIdMap.has(order.coachId)) {
+        coachIdMap.set(order.coachId, []);
+      }
+      coachIdMap.get(order.coachId)!.push(order);
+    });
+
+    const repeatCustomers: RepeatCustomer[] = [];
+    coachIdMap.forEach((coachOrders, coachId) => {
+      const coach = users.find(u => u.id === coachId && u.role === 'coach');
+      if (!coach) return;
+
+      const skills = coachSkills.filter(s => s.userId === coachId);
+      const coachReviews = reviews.filter(r => r.toUserId === coachId && r.fromUserId === currentUserId);
+      const avgRating = coachReviews.length > 0
+        ? coachReviews.reduce((sum, r) => sum + r.overallRating, 0) / coachReviews.length
+        : 0;
+
+      const sortedOrders = [...coachOrders].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+      repeatCustomers.push({
+        coach,
+        skills,
+        orderCount: coachOrders.length,
+        lastOrder: sortedOrders[0] || null,
+        averageRating: Math.round(avgRating * 100) / 100,
+      });
+    });
+
+    repeatCustomers.sort((a, b) => b.orderCount - a.orderCount);
+    return repeatCustomers;
+  },
+
+  createOrderFromRepeat: (coachId, skillId, orderData) => {
+    const { currentUserId, coachSkills } = get();
+    const skill = coachSkills.find(s => s.id === skillId);
+    if (!skill) throw new Error('Skill not found');
+
+    const newOrder: Order = {
+      id: generateId(),
+      playerId: currentUserId!,
+      coachId,
+      gameId: orderData.gameId,
+      duration: orderData.duration,
+      startTime: orderData.startTime,
+      requirements: orderData.requirements,
+      totalPrice: skill.pricePerHour * orderData.duration,
+      status: 'pending_payment',
+      createdAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
+    };
+
+    set(state => ({
+      orders: [...state.orders, newOrder],
+      pendingOrderData: null,
+      matchResults: [],
+    }));
+
+    return newOrder;
+  },
 
   registerPlayer: (data) => {
     const newUser: User = {
