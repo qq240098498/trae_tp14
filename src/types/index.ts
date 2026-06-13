@@ -86,3 +86,21 @@ export interface CreateOrderData {
   budget: number;
   voiceRequired: boolean;
 }
+
+export type BookingFailureReason =
+  | 'coach_not_found'
+  | 'skill_not_found'
+  | 'game_not_matched'
+  | 'coach_not_available_today'
+  | 'start_time_passed'
+  | 'time_conflict'
+  | 'price_exceeds_budget'
+  | 'duration_invalid'
+  | 'unknown';
+
+export interface BookingValidationResult {
+  valid: boolean;
+  reason?: BookingFailureReason;
+  message?: string;
+  detail?: string;
+}

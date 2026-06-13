@@ -1,13 +1,13 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, RefreshCw, Search, Filter, TrendingUp, Star, DollarSign, Wifi, Users, Clock, Heart, ChevronRight, Check, Zap } from 'lucide-react';
+import { ArrowLeft, Sparkles, RefreshCw, Search, Filter, TrendingUp, Star, DollarSign, Wifi, Users, Clock, Heart, ChevronRight, Check, Zap, X, AlertTriangle, Calendar, Ban, Clock as ClockIcon, Gamepad2, Wallet, UserX } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import MatchCard from '../components/order/MatchCard';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import StarRating from '../components/common/StarRating';
 import { cn } from '../lib/utils';
-import type { RepeatCustomer } from '../types';
+import type { RepeatCustomer, BookingValidationResult, BookingFailureReason } from '../types';
 
 type SortKey = 'match' | 'rating' | 'price_asc' | 'price_desc';
 type TabKey = 'all' | 'repeat';
@@ -18,6 +18,7 @@ export default function MatchPage() {
   const generateMatches = useAppStore(s => s.generateMatches);
   const createOrder = useAppStore(s => s.createOrder);
   const createOrderFromRepeat = useAppStore(s => s.createOrderFromRepeat);
+  const validateRepeatBooking = useAppStore(s => s.validateRepeatBooking);
   const matchResults = useAppStore(s => s.matchResults);
   const getRepeatCustomers = useAppStore(s => s.getRepeatCustomers);
   const navigate = useNavigate();
@@ -31,6 +32,7 @@ export default function MatchPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [selectedRepeatCoach, setSelectedRepeatCoach] = useState<RepeatCustomer | null>(null);
   const [repeatLoading, setRepeatLoading] = useState(false);
+  const [bookingError, setBookingError] = useState<{ coachId: string; result: BookingValidationResult } | null>(null);
   const isSelectingRef = useRef(false);
 
   useEffect(() => {
@@ -118,12 +120,72 @@ export default function MatchPage() {
     navigate(`/orders/${order.id}`);
   };
 
-  const handleRepeatSelect = (repeatCustomer: RepeatCustomer) => {
-    if (!pendingOrder) return;
-    const gameSkill = repeatCustomer.skills.find(s => s.gameId === pendingOrder.gameId);
-    if (!gameSkill) return;
+  const getFailureIcon = (reason: BookingFailureReason) => {
+    switch (reason) {
+      case 'coach_not_found':
+        return UserX;
+      case 'game_not_matched':
+        return Gamepad2;
+      case 'coach_not_available_today':
+        return Ban;
+      case 'start_time_passed':
+        return ClockIcon;
+      case 'time_conflict':
+        return Calendar;
+      case 'price_exceeds_budget':
+        return Wallet;
+      case 'duration_invalid':
+        return Clock;
+      default:
+        return AlertTriangle;
+    }
+  };
 
+  const closeBookingError = () => {
+    setBookingError(null);
+  };
+
+  const handleRepeatSelect = (repeatCustomer: RepeatCustomer) => {
+    if (!pendingOrder) {
+      setBookingError({
+        coachId: repeatCustomer.coach.id,
+        result: {
+          valid: false,
+          reason: 'unknown',
+          message: '预约数据不存在',
+          detail: '请返回重新填写预约信息',
+        },
+      });
+      return;
+    }
+
+    const gameSkill = repeatCustomer.skills.find(s => s.gameId === pendingOrder.gameId);
+    if (!gameSkill) {
+      const game = getGameById(pendingOrder.gameId);
+      setBookingError({
+        coachId: repeatCustomer.coach.id,
+        result: {
+          valid: false,
+          reason: 'game_not_matched',
+          message: '该陪玩师不提供此游戏服务',
+          detail: `${repeatCustomer.coach.username} 暂时不接「${game?.name || '此游戏'}」的订单，请选择其他游戏或其他陪玩师`,
+        },
+      });
+      return;
+    }
+
+    const validation = validateRepeatBooking(repeatCustomer.coach.id, pendingOrder);
+    if (!validation.valid) {
+      setBookingError({
+        coachId: repeatCustomer.coach.id,
+        result: validation,
+      });
+      return;
+    }
+
+    setSelectedRepeatCoach(repeatCustomer);
     setRepeatLoading(true);
+    setBookingError(null);
     setTimeout(() => {
       isSelectingRef.current = true;
       const order = createOrderFromRepeat(repeatCustomer.coach.id, gameSkill.id, pendingOrder);
@@ -346,13 +408,20 @@ export default function MatchPage() {
                 {filteredRepeatCustomers.map((rc, index) => {
                   const gameSkill = rc.skills.find(s => s.gameId === pendingOrder?.gameId);
                   const lastGame = rc.lastOrder ? getGameById(rc.lastOrder.gameId) : null;
+                  const showError = bookingError && bookingError.coachId === rc.coach.id;
+                  const ErrorIcon = showError && bookingError.result.reason ? getFailureIcon(bookingError.result.reason) : AlertTriangle;
                   return (
                     <Card
                       key={rc.coach.id}
-                      className="overflow-hidden animate-fade-in-up border-fuchsia-500/30"
+                      className={cn(
+                        'overflow-hidden animate-fade-in-up transition-all',
+                        showError ? 'border-red-500/50' : 'border-fuchsia-500/30'
+                      )}
                       style={{
                         animationDelay: `${index * 100}ms`,
-                        boxShadow: '0 0 20px rgba(217, 70, 239, 0.1)'
+                        boxShadow: showError
+                          ? '0 0 25px rgba(239, 68, 68, 0.15)'
+                          : '0 0 20px rgba(217, 70, 239, 0.1)'
                       }}
                     >
                       <div className="p-5">
@@ -374,7 +443,7 @@ export default function MatchPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2">
                               <div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <h4 className="font-display font-bold text-lg">{rc.coach.username}</h4>
                                   {rc.coach.isOnline && (
                                     <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/20 border border-green-400/40 text-xs text-green-400">
@@ -425,6 +494,82 @@ export default function MatchPage() {
                           </div>
                         </div>
 
+                        {showError && !bookingError.result.valid && (
+                          <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/30 animate-fade-in-up">
+                            <div className="flex items-start gap-3">
+                              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                                <ErrorIcon size={20} className="text-red-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <div className="font-medium text-red-400 flex items-center gap-2">
+                                      <AlertTriangle size={14} />
+                                      {bookingError.result.message || '预约失败'}
+                                    </div>
+                                    <p className="text-sm text-red-300/80 mt-1.5 leading-relaxed">
+                                      {bookingError.result.detail || '请稍后重试或选择其他陪玩师'}
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={closeBookingError}
+                                    className="flex-shrink-0 p-1 rounded hover:bg-red-500/20 text-red-400/70 hover:text-red-400 transition-colors"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {bookingError.result.reason === 'coach_not_available_today' && (
+                                    <Link to="/order/create">
+                                      <Button variant="outline" size="sm" className="border-red-500/30 text-red-400 hover:bg-red-500/10 !py-1.5 !px-2.5 text-xs">
+                                        <Calendar size={12} className="mr-1" /> 改约明天
+                                      </Button>
+                                    </Link>
+                                  )}
+                                  {bookingError.result.reason === 'time_conflict' && (
+                                    <Link to="/order/create">
+                                      <Button variant="outline" size="sm" className="border-red-500/30 text-red-400 hover:bg-red-500/10 !py-1.5 !px-2.5 text-xs">
+                                        <ClockIcon size={12} className="mr-1" /> 换个时间
+                                      </Button>
+                                    </Link>
+                                  )}
+                                  {bookingError.result.reason === 'price_exceeds_budget' && (
+                                    <Link to="/order/create">
+                                      <Button variant="outline" size="sm" className="border-red-500/30 text-red-400 hover:bg-red-500/10 !py-1.5 !px-2.5 text-xs">
+                                        <Wallet size={12} className="mr-1" /> 调整预算
+                                      </Button>
+                                    </Link>
+                                  )}
+                                  {(bookingError.result.reason === 'game_not_matched' || bookingError.result.reason === 'coach_not_found') && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="border-cyan-neon/30 text-cyan-neon hover:bg-cyan-neon/10 !py-1.5 !px-2.5 text-xs"
+                                      onClick={() => setActiveTab('all')}
+                                    >
+                                      <Users size={12} className="mr-1" /> 选其他陪玩师
+                                    </Button>
+                                  )}
+                                  {bookingError.result.reason === 'start_time_passed' && (
+                                    <Link to="/order/create">
+                                      <Button variant="outline" size="sm" className="border-red-500/30 text-red-400 hover:bg-red-500/10 !py-1.5 !px-2.5 text-xs">
+                                        <ClockIcon size={12} className="mr-1" /> 重新选时间
+                                      </Button>
+                                    </Link>
+                                  )}
+                                  {bookingError.result.reason === 'duration_invalid' && (
+                                    <Link to="/order/create">
+                                      <Button variant="outline" size="sm" className="border-red-500/30 text-red-400 hover:bg-red-500/10 !py-1.5 !px-2.5 text-xs">
+                                        <Clock size={12} className="mr-1" /> 调整时长
+                                      </Button>
+                                    </Link>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="mt-4 pt-4 border-t border-white/5 flex gap-3">
                           <Link
                             to={`/coaches/${rc.coach.id}`}
@@ -438,16 +583,30 @@ export default function MatchPage() {
                             <Button
                               variant="primary"
                               size="sm"
-                              className="flex-1 bg-gradient-to-r from-fuchsia-500 to-pink-500 hover:from-fuchsia-600 hover:to-pink-600"
+                              className={cn(
+                                'flex-1',
+                                showError
+                                  ? 'bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600'
+                                  : 'bg-gradient-to-r from-fuchsia-500 to-pink-500 hover:from-fuchsia-600 hover:to-pink-600'
+                              )}
                               onClick={() => handleRepeatSelect(rc)}
-                              disabled={repeatLoading}
+                              disabled={repeatLoading && selectedRepeatCoach?.coach.id === rc.coach.id}
                             >
                               {repeatLoading && selectedRepeatCoach?.coach.id === rc.coach.id ? (
                                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
                               ) : (
-                                <Heart size={16} className="mr-1" />
+                                showError ? (
+                                  <AlertTriangle size={16} className="mr-1" />
+                                ) : (
+                                  <Heart size={16} className="mr-1" />
+                                )
                               )}
-                              再次预约
+                              {repeatLoading && selectedRepeatCoach?.coach.id === rc.coach.id
+                                ? '预约中...'
+                                : showError
+                                ? '重新预约'
+                                : '再次预约'
+                              }
                             </Button>
                           ) : (
                             <Button
